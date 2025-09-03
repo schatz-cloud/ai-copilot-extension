@@ -1,0 +1,231 @@
+{
+  "name": "ai-copilot-extension",
+  "displayName": "AI Copilot Extension",
+  "description": "VS Code extension with AI copilot capabilities and agentic abilities for intelligent code assistance",
+  "version": "1.0.0",
+  "publisher": "ai-copilot",
+  "author": "SATISH KUMAR NADARAJAN (penintechwiz@gmail.com)",
+  "license": "MIT",
+  "engines": {
+    "vscode": "^1.74.0"
+  },
+  "categories": [
+    "Other",
+    "Machine Learning",
+    "Snippets",
+    "Programming Languages"
+  ],
+  "keywords": [
+    "ai",
+    "copilot",
+    "code-completion",
+    "agent",
+    "assistant",
+    "openai",
+    "gpt",
+    "artificial-intelligence"
+  ],
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "main": "./out/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "aiCopilot.generateCode",
+        "title": "Generate Code with AI",
+        "category": "AI Copilot",
+        "icon": "$(sparkle)"
+      },
+      {
+        "command": "aiCopilot.refactorCode",
+        "title": "Refactor Selected Code",
+        "category": "AI Copilot",
+        "icon": "$(tools)"
+      },
+      {
+        "command": "aiCopilot.explainCode",
+        "title": "Explain Selected Code",
+        "category": "AI Copilot",
+        "icon": "$(question)"
+      },
+      {
+        "command": "aiCopilot.openChat",
+        "title": "Open AI Chat Assistant",
+        "category": "AI Copilot",
+        "icon": "$(comment-discussion)"
+      },
+      {
+        "command": "aiCopilot.toggleAgenticMode",
+        "title": "Toggle Agentic Mode",
+        "category": "AI Copilot",
+        "icon": "$(robot)"
+      },
+      {
+        "command": "aiCopilot.analyzeCodebase",
+        "title": "Analyze Codebase",
+        "category": "AI Copilot",
+        "icon": "$(search)"
+      }
+    ],
+    "keybindings": [
+      {
+        "command": "aiCopilot.generateCode",
+        "key": "ctrl+shift+g",
+        "mac": "cmd+shift+g",
+        "when": "editorTextFocus"
+      },
+      {
+        "command": "aiCopilot.openChat",
+        "key": "ctrl+shift+c",
+        "mac": "cmd+shift+c"
+      },
+      {
+        "command": "aiCopilot.explainCode",
+        "key": "ctrl+shift+e",
+        "mac": "cmd+shift+e",
+        "when": "editorHasSelection"
+      }
+    ],
+    "menus": {
+      "editor/context": [
+        {
+          "command": "aiCopilot.generateCode",
+          "when": "editorTextFocus",
+          "group": "aiCopilot@1"
+        },
+        {
+          "command": "aiCopilot.refactorCode",
+          "when": "editorHasSelection",
+          "group": "aiCopilot@2"
+        },
+        {
+          "command": "aiCopilot.explainCode",
+          "when": "editorHasSelection",
+          "group": "aiCopilot@3"
+        }
+      ]
+    },
+    "views": {
+      "aiCopilot": [
+        {
+          "id": "aiCopilotChat",
+          "name": "AI Chat Assistant",
+          "when": "aiCopilot.enabled"
+        },
+        {
+          "id": "aiCopilotAgent",
+          "name": "Agentic Assistant",
+          "when": "aiCopilot.agenticMode"
+        }
+      ]
+    },
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "aiCopilot",
+          "title": "AI Copilot",
+          "icon": "$(robot)"
+        }
+      ]
+    },
+    "configuration": {
+      "title": "AI Copilot",
+      "properties": {
+        "aiCopilot.apiKey": {
+          "type": "string",
+          "default": "",
+          "description": "OpenAI API key for AI services (keep this secure)",
+          "markdownDescription": "Your OpenAI API key. Get one from [OpenAI Platform](https://platform.openai.com/api-keys)"
+        },
+        "aiCopilot.model": {
+          "type": "string",
+          "default": "gpt-4",
+          "description": "AI model to use for code generation and assistance",
+          "enum": [
+            "gpt-4",
+            "gpt-4-turbo",
+            "gpt-3.5-turbo",
+            "claude-3-sonnet",
+            "claude-3-haiku",
+            "local"
+          ],
+          "enumDescriptions": [
+            "GPT-4 - Most capable model for complex tasks",
+            "GPT-4 Turbo - Faster GPT-4 with larger context",
+            "GPT-3.5 Turbo - Fast and cost-effective",
+            "Claude 3 Sonnet - Anthropic's balanced model",
+            "Claude 3 Haiku - Anthropic's fastest model",
+            "Local - Use local model endpoint"
+          ]
+        },
+        "aiCopilot.enableAutoComplete": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable automatic AI-powered code completion suggestions"
+        },
+        "aiCopilot.enableAgenticMode": {
+          "type": "boolean",
+          "default": false,
+          "description": "Enable autonomous agentic capabilities (experimental)",
+          "markdownDescription": "⚠️ **Experimental**: Allows AI to perform autonomous actions with your approval"
+        },
+        "aiCopilot.maxTokens": {
+          "type": "number",
+          "default": 2048,
+          "description": "Maximum tokens for AI responses",
+          "minimum": 100,
+          "maximum": 8192
+        },
+        "aiCopilot.temperature": {
+          "type": "number",
+          "default": 0.3,
+          "description": "AI creativity level (0.0 = deterministic, 1.0 = creative)",
+          "minimum": 0.0,
+          "maximum": 1.0
+        },
+        "aiCopilot.localEndpoint": {
+          "type": "string",
+          "default": "http://localhost:11434",
+          "description": "Local AI model endpoint URL (for local model option)"
+        }
+      }
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "pretest": "npm run compile && npm run lint",
+    "lint": "eslint src --ext ts",
+    "lint:fix": "eslint src --ext ts --fix",
+    "test": "node ./out/test/runTest.js",
+    "package": "vsce package",
+    "esbuild": "esbuild src/extension.ts --bundle --outfile=out/extension.js --external:vscode --format=cjs --platform=node --sourcemap",
+    "esbuild:watch": "npm run esbuild -- --watch",
+    "build": "npm run esbuild && npm run package"
+  },
+  "devDependencies": {
+    "@types/vscode": "^1.74.0",
+    "@types/node": "16.x",
+    "@typescript-eslint/eslint-plugin": "^5.45.0",
+    "@typescript-eslint/parser": "^5.45.0",
+    "eslint": "^8.28.0",
+    "typescript": "^4.9.4",
+    "esbuild": "^0.19.0",
+    "@vscode/test-electron": "^2.2.0",
+    "@vscode/vsce": "^2.15.0"
+  },
+  "dependencies": {
+    "axios": "^1.6.0",
+    "openai": "^4.0.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/penintechwiz/ai-copilot-extension.git"
+  },
+  "bugs": {
+    "url": "https://github.com/penintechwiz/ai-copilot-extension/issues"
+  },
+  "homepage": "https://github.com/penintechwiz/ai-copilot-extension#readme"
+}
