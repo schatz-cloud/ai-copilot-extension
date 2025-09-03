@@ -182,23 +182,6 @@
           "default": true,
           "description": "Enable inline code completion suggestions as you type"
         },
-        "aiCopilot.enableMultiFileContext": {
-          "type": "boolean",
-          "default": true,
-          "description": "Enable multi-file context for more intelligent code completion"
-        },
-        "aiCopilot.maxRelatedFiles": {
-          "type": "number",
-          "default": 5,
-          "description": "Maximum number of related files to include in completion context",
-          "minimum": 1,
-          "maximum": 10
-        },
-        "aiCopilot.enableInlineCompletion": {
-          "type": "boolean",
-          "default": true,
-          "description": "Enable inline code completion suggestions as you type"
-        },
         "aiCopilot.enableAgenticMode": {
           "type": "boolean",
           "default": false,
