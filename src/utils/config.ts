@@ -25,6 +25,9 @@ export enum ConfigKeys {
     API_KEY = 'aiCopilot.apiKey',
     MODEL = 'aiCopilot.model',
     ENABLE_AUTO_COMPLETE = 'aiCopilot.enableAutoComplete',
+    ENABLE_MULTI_FILE_CONTEXT = 'aiCopilot.enableMultiFileContext',
+    MAX_RELATED_FILES = 'aiCopilot.maxRelatedFiles',
+    ENABLE_INLINE_COMPLETION = 'aiCopilot.enableInlineCompletion',
     ENABLE_AGENTIC_MODE = 'aiCopilot.enableAgenticMode',
     MAX_TOKENS = 'aiCopilot.maxTokens',
     TEMPERATURE = 'aiCopilot.temperature',
@@ -52,6 +55,9 @@ export interface ExtensionConfig {
     apiKey: string;
     model: SupportedModels;
     enableAutoComplete: boolean;
+    enableMultiFileContext: boolean;
+    maxRelatedFiles: number;
+    enableInlineCompletion: boolean;
     enableAgenticMode: boolean;
     maxTokens: number;
     temperature: number;
@@ -62,10 +68,13 @@ export interface ExtensionConfig {
  * Default configuration values
  * These values are used when user hasn't configured specific settings
  */
-const DEFAULT_CONFIG: ExtensionConfig = {
+const defaultConfig: ExtensionConfig = {
     apiKey: '',
     model: SupportedModels.GPT_4,
     enableAutoComplete: true,
+    enableMultiFileContext: true,
+    maxRelatedFiles: 5,
+    enableInlineCompletion: true,
     enableAgenticMode: false,
     maxTokens: 2048,
     temperature: 0.3,
@@ -99,7 +108,7 @@ export class ConfigManager {
      * @returns The API key string, or empty string if not configured
      */
     public getApiKey(): string {
-        return this.configuration.get<string>(ConfigKeys.API_KEY, DEFAULT_CONFIG.apiKey);
+        return this.configuration.get<string>(ConfigKeys.API_KEY, defaultConfig.apiKey);
     }
 
     /**
@@ -108,14 +117,14 @@ export class ConfigManager {
      * @returns The selected AI model enum value
      */
     public getModel(): SupportedModels {
-        const modelString = this.configuration.get<string>(ConfigKeys.MODEL, DEFAULT_CONFIG.model);
+        const modelString = this.configuration.get<string>(ConfigKeys.MODEL, defaultConfig.model);
         
         if (Object.values(SupportedModels).includes(modelString as SupportedModels)) {
             return modelString as SupportedModels;
         }
         
-        console.warn(`Invalid model configured: ${modelString}, falling back to ${DEFAULT_CONFIG.model}`);
-        return DEFAULT_CONFIG.model;
+        console.warn(`Invalid model configured: ${modelString}, falling back to ${defaultConfig.model}`);
+        return defaultConfig.model;
     }
 
     /**
@@ -124,7 +133,34 @@ export class ConfigManager {
      * @returns True if auto-completion should be active, false otherwise
      */
     public isAutoCompleteEnabled(): boolean {
-        return this.configuration.get<boolean>(ConfigKeys.ENABLE_AUTO_COMPLETE, DEFAULT_CONFIG.enableAutoComplete);
+        return this.configuration.get<boolean>(ConfigKeys.ENABLE_AUTO_COMPLETE, defaultConfig.enableAutoComplete);
+    }
+
+    /**
+     * Check if multi-file context is enabled
+     * 
+     * @returns True if multi-file context should be used, false otherwise
+     */
+    public isMultiFileContextEnabled(): boolean {
+        return this.configuration.get<boolean>(ConfigKeys.ENABLE_MULTI_FILE_CONTEXT, defaultConfig.enableMultiFileContext);
+    }
+
+    /**
+     * Get the maximum number of related files to include in context
+     * 
+     * @returns The maximum number of related files
+     */
+    public getMaxRelatedFiles(): number {
+        return this.configuration.get<number>(ConfigKeys.MAX_RELATED_FILES, defaultConfig.maxRelatedFiles);
+    }
+
+    /**
+     * Check if inline completion is enabled
+     * 
+     * @returns True if inline completion should be active, false otherwise
+     */
+    public isInlineCompletionEnabled(): boolean {
+        return this.configuration.get<boolean>(ConfigKeys.ENABLE_INLINE_COMPLETION, defaultConfig.enableInlineCompletion);
     }
 
     /**
@@ -133,7 +169,7 @@ export class ConfigManager {
      * @returns True if agentic capabilities should be active, false otherwise
      */
     public isAgenticModeEnabled(): boolean {
-        return this.configuration.get<boolean>(ConfigKeys.ENABLE_AGENTIC_MODE, DEFAULT_CONFIG.enableAgenticMode);
+        return this.configuration.get<boolean>(ConfigKeys.ENABLE_AGENTIC_MODE, defaultConfig.enableAgenticMode);
     }
 
     /**
@@ -142,11 +178,11 @@ export class ConfigManager {
      * @returns The maximum token count as a number
      */
     public getMaxTokens(): number {
-        const maxTokens = this.configuration.get<number>(ConfigKeys.MAX_TOKENS, DEFAULT_CONFIG.maxTokens);
+        const maxTokens = this.configuration.get<number>(ConfigKeys.MAX_TOKENS, defaultConfig.maxTokens);
         
         if (maxTokens < 100 || maxTokens > 8192) {
-            console.warn(`Invalid maxTokens value: ${maxTokens}, using default: ${DEFAULT_CONFIG.maxTokens}`);
-            return DEFAULT_CONFIG.maxTokens;
+            console.warn(`Invalid maxTokens value: ${maxTokens}, using default: ${defaultConfig.maxTokens}`);
+            return defaultConfig.maxTokens;
         }
         
         return maxTokens;
@@ -158,11 +194,11 @@ export class ConfigManager {
      * @returns The temperature value between 0.0 and 1.0
      */
     public getTemperature(): number {
-        const temperature = this.configuration.get<number>(ConfigKeys.TEMPERATURE, DEFAULT_CONFIG.temperature);
+        const temperature = this.configuration.get<number>(ConfigKeys.TEMPERATURE, defaultConfig.temperature);
         
         if (temperature < 0.0 || temperature > 1.0) {
-            console.warn(`Invalid temperature value: ${temperature}, using default: ${DEFAULT_CONFIG.temperature}`);
-            return DEFAULT_CONFIG.temperature;
+            console.warn(`Invalid temperature value: ${temperature}, using default: ${defaultConfig.temperature}`);
+            return defaultConfig.temperature;
         }
         
         return temperature;
@@ -174,7 +210,7 @@ export class ConfigManager {
      * @returns The local endpoint URL string
      */
     public getLocalEndpoint(): string {
-        return this.configuration.get<string>(ConfigKeys.LOCAL_ENDPOINT, DEFAULT_CONFIG.localEndpoint);
+        return this.configuration.get<string>(ConfigKeys.LOCAL_ENDPOINT, defaultConfig.localEndpoint);
     }
 
     /**
@@ -187,6 +223,9 @@ export class ConfigManager {
             apiKey: this.getApiKey(),
             model: this.getModel(),
             enableAutoComplete: this.isAutoCompleteEnabled(),
+            enableMultiFileContext: this.isMultiFileContextEnabled(),
+            maxRelatedFiles: this.getMaxRelatedFiles(),
+            enableInlineCompletion: this.isInlineCompletionEnabled(),
             enableAgenticMode: this.isAgenticModeEnabled(),
             maxTokens: this.getMaxTokens(),
             temperature: this.getTemperature(),

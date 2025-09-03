@@ -19,6 +19,8 @@
 import * as vscode from 'vscode';
 import { AIProvider, CodeCompletionRequest, AIProviderError } from './aiProvider';
 import { Logger } from '../utils/logger';
+import { ContextCollector } from '../utils/contextCollector';
+import { ConfigManager } from '../utils/config';
 
 /**
  * Completion cache entry for performance optimization
@@ -44,6 +46,7 @@ interface CompletionCacheEntry {
 export class CompletionProvider implements vscode.CompletionItemProvider {
     private aiProvider: AIProvider;
     private logger: Logger;
+    private contextCollector: ContextCollector;
     private completionCache: Map<string, CompletionCacheEntry> = new Map();
     private readonly cacheTimeout = 30000; // 30 seconds cache timeout
     private readonly maxCacheSize = 100; // Maximum cache entries
@@ -55,10 +58,12 @@ export class CompletionProvider implements vscode.CompletionItemProvider {
      * 
      * @param aiProvider - AI provider instance for generating completions
      * @param logger - Logger instance for debugging and monitoring
+     * @param configManager - Configuration manager for settings
      */
-    constructor(aiProvider: AIProvider, logger: Logger) {
+    constructor(aiProvider: AIProvider, logger: Logger, configManager: ConfigManager) {
         this.aiProvider = aiProvider;
         this.logger = logger;
+        this.contextCollector = new ContextCollector(logger, configManager);
         
         this.logger.info('🔧 Code Completion Provider initialized');
     }
@@ -90,7 +95,7 @@ export class CompletionProvider implements vscode.CompletionItemProvider {
                 return undefined;
             }
 
-            const completionRequest = this.buildCompletionRequest(document, position);
+            const completionRequest = await this.buildCompletionRequest(document, position);
             
             const cacheKey = this.generateCacheKey(completionRequest);
             const cachedResult = this.getCachedCompletion(cacheKey);
@@ -247,10 +252,10 @@ export class CompletionProvider implements vscode.CompletionItemProvider {
      * @param position - Cursor position
      * @returns Code completion request object
      */
-    private buildCompletionRequest(
+    private async buildCompletionRequest(
         document: vscode.TextDocument,
         position: vscode.Position
-    ): CodeCompletionRequest {
+    ): Promise<CodeCompletionRequest> {
         
         const textBeforeCursor = document.getText(new vscode.Range(
             new vscode.Position(0, 0),
@@ -271,12 +276,17 @@ export class CompletionProvider implements vscode.CompletionItemProvider {
             ? textAfterCursor.substring(0, maxContextLength)
             : textAfterCursor;
 
+        const contextResult = await this.contextCollector.collectContext(document, position);
+
         return {
             prefix,
             suffix,
             language: document.languageId,
             filePath: document.fileName,
-            maxLength: 200 // Reasonable completion length
+            maxLength: 200, // Reasonable completion length
+            relatedFiles: contextResult.relatedFiles,
+            imports: contextResult.imports,
+            projectContext: contextResult.projectContext
         };
     }
 

@@ -15,6 +15,7 @@ import { Logger } from './utils/logger';
 import { AIProvider } from './providers/aiProvider';
 import { OpenAIProvider } from './providers/openaiProvider';
 import { CompletionProvider } from './providers/completionProvider';
+import { InlineCompletionProvider } from './providers/inlineCompletionProvider';
 import { ChatPanel } from './views/chatPanel';
 import { AgentPanel } from './views/agentPanel';
 import { CodeAgent } from './agents/codeAgent';
@@ -29,6 +30,7 @@ let configManager: ConfigManager;
 let logger: Logger;
 let aiProvider: AIProvider;
 let completionProvider: CompletionProvider;
+let inlineCompletionProvider: InlineCompletionProvider;
 let chatPanel: ChatPanel;
 let agentPanel: AgentPanel;
 let codeAgent: CodeAgent;
@@ -172,9 +174,10 @@ async function initializeCompletionProvider(): Promise<void> {
         return;
     }
     
-    logger.info('🔧 Initializing Code Completion Provider...');
+    logger.info('🔧 Initializing Code Completion Providers...');
     
-    completionProvider = new CompletionProvider(aiProvider, logger);
+    completionProvider = new CompletionProvider(aiProvider, logger, configManager);
+    inlineCompletionProvider = new InlineCompletionProvider(aiProvider, logger, configManager);
     
     const supportedLanguages = [
         'typescript', 'javascript', 'python', 'java', 'csharp', 'cpp', 'c',
@@ -191,7 +194,17 @@ async function initializeCompletionProvider(): Promise<void> {
         extensionContext.subscriptions.push(disposable);
     }
     
-    logger.info('✅ Code Completion Provider initialized');
+    if (configManager.isInlineCompletionEnabled()) {
+        for (const language of supportedLanguages) {
+            const inlineDisposable = vscode.languages.registerInlineCompletionItemProvider(
+                language,
+                inlineCompletionProvider
+            );
+            extensionContext.subscriptions.push(inlineDisposable);
+        }
+    }
+    
+    logger.info('✅ Code Completion Providers initialized');
 }
 
 /**

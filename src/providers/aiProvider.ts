@@ -124,6 +124,20 @@ export interface CodeCompletionRequest {
     
     /** Maximum completion length */
     maxLength?: number;
+    
+    /** Related files context for multi-file awareness */
+    relatedFiles?: Array<{
+        path: string;
+        content: string;
+        language: string;
+        relevanceScore: number;
+    }>;
+    
+    /** Import statements and dependencies */
+    imports?: string[];
+    
+    /** Project context information */
+    projectContext?: string;
 }
 
 /**

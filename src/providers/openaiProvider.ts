@@ -443,12 +443,29 @@ export class OpenAIProvider extends AIProvider {
             prompt += `File: ${request.filePath}\n\n`;
         }
 
+        if (request.projectContext) {
+            prompt += `Project Context: ${request.projectContext}\n\n`;
+        }
+
+        if (request.relatedFiles && request.relatedFiles.length > 0) {
+            prompt += `Related Files Context:\n`;
+            for (const file of request.relatedFiles) {
+                prompt += `\n--- ${file.path} (relevance: ${file.relevanceScore.toFixed(2)}) ---\n`;
+                prompt += `\`\`\`${file.language}\n${file.content}\n\`\`\`\n`;
+            }
+            prompt += '\n';
+        }
+
+        if (request.imports && request.imports.length > 0) {
+            prompt += `Imports: ${request.imports.join(', ')}\n\n`;
+        }
+
         prompt += '```' + request.language + '\n';
         prompt += request.prefix;
         prompt += '<CURSOR>'; // Indicate cursor position
         prompt += request.suffix;
         prompt += '\n```\n\n';
-        prompt += 'Complete the code at the <CURSOR> position:';
+        prompt += 'Complete the code at the <CURSOR> position. Consider the related files and imports for context:';
 
         return prompt;
     }
