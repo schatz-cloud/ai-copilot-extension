@@ -17,6 +17,7 @@
  */
 
 import * as vscode from 'vscode';
+import * as path from 'path';
 import { AIProvider, AIMessage } from '../providers/aiProvider';
 import { Logger } from '../utils/logger';
 
@@ -47,6 +48,22 @@ interface ChatMessage {
         path: string;
         lineStart?: number;
         lineEnd?: number;
+    }>;
+    
+    /** Manual file attachments */
+    attachedFiles?: Array<{
+        name: string;
+        path: string;
+        content: string;
+        type: 'text' | 'image' | 'other';
+        size: number;
+    }>;
+    
+    /** Screenshot attachments */
+    screenshots?: Array<{
+        name: string;
+        dataUrl: string;
+        timestamp: Date;
     }>;
 }
 
@@ -183,13 +200,18 @@ export class ChatPanel implements vscode.TreeDataProvider<ChatMessage>, vscode.W
      * @param content - Message content
      * @param role - Message role (user or assistant)
      */
-    async sendMessage(content: string, role: 'user' | 'assistant' = 'user'): Promise<void> {
+    async sendMessage(content: string, role: 'user' | 'assistant' = 'user', attachments?: any[]): Promise<void> {
         const message: ChatMessage = {
             id: this.generateMessageId(),
             role,
             content,
             timestamp: new Date()
         };
+
+        if (attachments && attachments.length > 0) {
+            message.attachedFiles = attachments.filter(a => a.type !== 'screenshot');
+            message.screenshots = attachments.filter(a => a.type === 'screenshot');
+        }
 
         this.messages.push(message);
         this.conversationHistory.push({
@@ -208,7 +230,7 @@ export class ChatPanel implements vscode.TreeDataProvider<ChatMessage>, vscode.W
 
         this.saveConversationHistory();
 
-        this.logger.logUserAction('chat-message-sent', { role, contentLength: content.length });
+        this.logger.logUserAction('chat-message-sent', { role, contentLength: content.length, attachmentCount: attachments?.length || 0 });
     }
 
     /**
@@ -233,7 +255,7 @@ export class ChatPanel implements vscode.TreeDataProvider<ChatMessage>, vscode.W
     private async handleWebviewMessage(message: any): Promise<void> {
         switch (message.type) {
             case 'send-message':
-                await this.sendMessage(message.content, 'user');
+                await this.sendMessage(message.content, 'user', message.attachments);
                 break;
                 
             case 'clear-chat':
@@ -251,6 +273,14 @@ export class ChatPanel implements vscode.TreeDataProvider<ChatMessage>, vscode.W
             case 'copy-message':
                 await vscode.env.clipboard.writeText(message.content);
                 vscode.window.showInformationMessage('Message copied to clipboard');
+                break;
+                
+            case 'attach-files':
+                await this.handleFileAttachment();
+                break;
+                
+            case 'take-screenshot':
+                await this.handleScreenshotCapture();
                 break;
                 
             default:
@@ -335,6 +365,15 @@ export class ChatPanel implements vscode.TreeDataProvider<ChatMessage>, vscode.W
             ));
         }
 
+        // Include manual attachments from the latest user message
+        const latestUserMessage = this.messages.filter(m => m.role === 'user').pop();
+        if (latestUserMessage?.attachedFiles) {
+            context.attachedFiles = latestUserMessage.attachedFiles;
+        }
+        if (latestUserMessage?.screenshots) {
+            context.attachedScreenshots = latestUserMessage.screenshots;
+        }
+
         return context;
     }
 
@@ -395,6 +434,92 @@ export class ChatPanel implements vscode.TreeDataProvider<ChatMessage>, vscode.W
         } catch (error) {
             this.logger.error('Failed to open file reference:', error);
             vscode.window.showErrorMessage(`Failed to open file: ${path}`);
+        }
+    }
+
+    /**
+     * Handle file attachment selection
+     */
+    private async handleFileAttachment(): Promise<void> {
+        try {
+            const options: vscode.OpenDialogOptions = {
+                canSelectMany: true,
+                canSelectFiles: true,
+                canSelectFolders: false,
+                filters: {
+                    'All Files': ['*'],
+                    'Text Files': ['txt', 'md', 'json', 'xml', 'csv'],
+                    'Code Files': ['js', 'ts', 'py', 'java', 'cpp', 'c', 'cs', 'php', 'rb', 'go', 'rs'],
+                    'Images': ['png', 'jpg', 'jpeg', 'gif', 'bmp', 'svg']
+                }
+            };
+
+            const fileUris = await vscode.window.showOpenDialog(options);
+
+            if (fileUris && fileUris.length > 0) {
+                const attachments = [];
+
+                for (const uri of fileUris) {
+                    const stat = await vscode.workspace.fs.stat(uri);
+                    const fileName = path.basename(uri.fsPath);
+                    const fileExtension = path.extname(fileName).toLowerCase();
+
+                    if (stat.size > 1024 * 1024) {
+                        vscode.window.showWarningMessage(`File ${fileName} is too large (max 1MB)`);
+                        continue;
+                    }
+
+                    let content = '';
+                    let type: 'text' | 'image' | 'other' = 'other';
+
+                    if (['.png', '.jpg', '.jpeg', '.gif', '.bmp'].includes(fileExtension)) {
+                        type = 'image';
+                        const buffer = await vscode.workspace.fs.readFile(uri);
+                        content = Buffer.from(buffer).toString('base64');
+                    } else if (['.txt', '.md', '.json', '.xml', '.csv', '.js', '.ts', '.py', '.java', '.cpp', '.c', '.cs', '.php', '.rb', '.go', '.rs'].includes(fileExtension)) {
+                        type = 'text';
+                        const buffer = await vscode.workspace.fs.readFile(uri);
+                        content = Buffer.from(buffer).toString('utf8');
+                    }
+
+                    attachments.push({
+                        name: fileName,
+                        path: uri.fsPath,
+                        content,
+                        type,
+                        size: stat.size
+                    });
+                }
+
+                await this.webviewView?.webview.postMessage({
+                    type: 'files-attached',
+                    attachments
+                });
+            }
+
+        } catch (error) {
+            this.logger.error('Failed to attach files:', error);
+            vscode.window.showErrorMessage('Failed to attach files');
+        }
+    }
+
+    /**
+     * Handle screenshot capture
+     */
+    private async handleScreenshotCapture(): Promise<void> {
+        try {
+            vscode.window.showInformationMessage(
+                'Screenshot capture is not yet implemented. Please use external screenshot tools and attach the image file instead.',
+                'Attach Image File'
+            ).then(selection => {
+                if (selection === 'Attach Image File') {
+                    this.handleFileAttachment();
+                }
+            });
+
+        } catch (error) {
+            this.logger.error('Failed to capture screenshot:', error);
+            vscode.window.showErrorMessage('Failed to capture screenshot');
         }
     }
 
@@ -630,6 +755,72 @@ export class ChatPanel implements vscode.TreeDataProvider<ChatMessage>, vscode.W
             opacity: 0.6;
             margin-top: 50px;
         }
+        
+        .attachment-buttons {
+            display: flex;
+            gap: 5px;
+        }
+        
+        .attach-button {
+            padding: 8px;
+            border: none;
+            border-radius: 4px;
+            background-color: var(--vscode-button-secondaryBackground);
+            color: var(--vscode-button-secondaryForeground);
+            cursor: pointer;
+            font-size: 16px;
+        }
+        
+        .attach-button:hover {
+            background-color: var(--vscode-button-secondaryHoverBackground);
+        }
+        
+        .attachments-preview {
+            margin-bottom: 10px;
+            padding: 10px;
+            border: 1px solid var(--vscode-panel-border);
+            border-radius: 4px;
+            background-color: var(--vscode-editor-background);
+        }
+        
+        .attachments-header {
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+        
+        .attachment-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 5px;
+            margin: 2px 0;
+            background-color: var(--vscode-list-hoverBackground);
+            border-radius: 3px;
+        }
+        
+        .attachment-preview {
+            max-width: 100px;
+            max-height: 60px;
+            border-radius: 3px;
+        }
+        
+        .clear-attachments {
+            margin-top: 5px;
+            padding: 4px 8px;
+            border: none;
+            border-radius: 3px;
+            background-color: var(--vscode-inputValidation-errorBackground);
+            color: var(--vscode-button-foreground);
+            cursor: pointer;
+        }
+        
+        .message-attachments, .message-screenshots {
+            margin: 5px 0;
+            padding: 5px;
+            border: 1px solid var(--vscode-panel-border);
+            border-radius: 3px;
+            background-color: var(--vscode-textCodeBlock-background);
+        }
     </style>
 </head>
 <body>
@@ -645,7 +836,17 @@ export class ChatPanel implements vscode.TreeDataProvider<ChatMessage>, vscode.W
         🤖 AI is thinking...
     </div>
     
+    <div class="attachments-preview" id="attachmentsPreview" style="display: none;">
+        <div class="attachments-header">Attachments:</div>
+        <div class="attachments-list" id="attachmentsList"></div>
+        <button class="clear-attachments" id="clearAttachments">Clear All</button>
+    </div>
+    
     <div class="input-container">
+        <div class="attachment-buttons">
+            <button class="attach-button" id="attachFileButton" title="Attach Files">📎</button>
+            <button class="attach-button" id="screenshotButton" title="Take Screenshot">📷</button>
+        </div>
         <input type="text" class="chat-input" id="chatInput" placeholder="Ask me anything about your code..." />
         <button class="send-button" id="sendButton">Send</button>
         <button class="clear-button" id="clearButton">Clear</button>
@@ -659,8 +860,14 @@ export class ChatPanel implements vscode.TreeDataProvider<ChatMessage>, vscode.W
         const clearButton = document.getElementById('clearButton');
         const typingIndicator = document.getElementById('typingIndicator');
         const emptyState = document.getElementById('emptyState');
+        const attachFileButton = document.getElementById('attachFileButton');
+        const screenshotButton = document.getElementById('screenshotButton');
+        const attachmentsPreview = document.getElementById('attachmentsPreview');
+        const attachmentsList = document.getElementById('attachmentsList');
+        const clearAttachments = document.getElementById('clearAttachments');
 
         let messages = [];
+        let currentAttachments = [];
 
         window.addEventListener('message', event => {
             const message = event.data;
@@ -682,17 +889,25 @@ export class ChatPanel implements vscode.TreeDataProvider<ChatMessage>, vscode.W
                 case 'focus-input':
                     chatInput.focus();
                     break;
+                    
+                case 'files-attached':
+                    currentAttachments.push(...message.attachments);
+                    updateAttachmentsPreview();
+                    break;
             }
         });
 
         function sendMessage() {
             const content = chatInput.value.trim();
-            if (content) {
+            if (content || currentAttachments.length > 0) {
                 vscode.postMessage({
                     type: 'send-message',
-                    content: content
+                    content: content,
+                    attachments: currentAttachments
                 });
                 chatInput.value = '';
+                currentAttachments = [];
+                updateAttachmentsPreview();
             }
         }
 
@@ -714,9 +929,39 @@ export class ChatPanel implements vscode.TreeDataProvider<ChatMessage>, vscode.W
                 const timestamp = new Date(msg.timestamp).toLocaleTimeString();
                 const role = msg.role === 'user' ? '👤 You' : '🤖 AI Assistant';
                 
+                let attachmentsHtml = '';
+                if (msg.attachedFiles && msg.attachedFiles.length > 0) {
+                    attachmentsHtml += '<div class="message-attachments">';
+                    attachmentsHtml += msg.attachedFiles.map(file => {
+                        if (file.type === 'image') {
+                            return \`<div class="attachment-item">
+                                <img src="data:image/png;base64,\${file.content}" class="attachment-preview" alt="\${file.name}">
+                                <span>\${file.name}</span>
+                            </div>\`;
+                        } else {
+                            return \`<div class="attachment-item">
+                                <span>📄 \${file.name} (\${(file.size / 1024).toFixed(1)} KB)</span>
+                            </div>\`;
+                        }
+                    }).join('');
+                    attachmentsHtml += '</div>';
+                }
+                
+                if (msg.screenshots && msg.screenshots.length > 0) {
+                    attachmentsHtml += '<div class="message-screenshots">';
+                    attachmentsHtml += msg.screenshots.map(screenshot => 
+                        \`<div class="attachment-item">
+                            <img src="\${screenshot.dataUrl}" class="attachment-preview" alt="\${screenshot.name}">
+                            <span>\${screenshot.name}</span>
+                        </div>\`
+                    ).join('');
+                    attachmentsHtml += '</div>';
+                }
+                
                 return \`
                     <div class="message \${msg.role}">
                         <div class="message-header">\${role} • \${timestamp}</div>
+                        \${attachmentsHtml}
                         <div class="message-content">\${formatMessageContent(msg.content)}</div>
                         <div class="message-actions">
                             <button class="action-button" onclick="copyMessage('\${msg.id}')" title="Copy">📋</button>
@@ -770,6 +1015,58 @@ export class ChatPanel implements vscode.TreeDataProvider<ChatMessage>, vscode.W
                 language: language
             });
         }
+
+        function updateAttachmentsPreview() {
+            if (currentAttachments.length === 0) {
+                attachmentsPreview.style.display = 'none';
+                return;
+            }
+            
+            attachmentsPreview.style.display = 'block';
+            attachmentsList.innerHTML = currentAttachments.map((attachment, index) => {
+                if (attachment.type === 'image') {
+                    return \`
+                        <div class="attachment-item">
+                            <img src="\${attachment.dataUrl || 'data:image/png;base64,' + attachment.content}" 
+                                 class="attachment-preview" alt="\${attachment.name}">
+                            <span>\${attachment.name}</span>
+                            <button onclick="removeAttachment(\${index})">❌</button>
+                        </div>
+                    \`;
+                } else {
+                    return \`
+                        <div class="attachment-item">
+                            <span>📄</span>
+                            <span>\${attachment.name}</span>
+                            <span>(\${(attachment.size / 1024).toFixed(1)} KB)</span>
+                            <button onclick="removeAttachment(\${index})">❌</button>
+                        </div>
+                    \`;
+                }
+            }).join('');
+        }
+        
+        function removeAttachment(index) {
+            currentAttachments.splice(index, 1);
+            updateAttachmentsPreview();
+        }
+
+        attachFileButton.addEventListener('click', () => {
+            vscode.postMessage({
+                type: 'attach-files'
+            });
+        });
+
+        screenshotButton.addEventListener('click', () => {
+            vscode.postMessage({
+                type: 'take-screenshot'
+            });
+        });
+
+        clearAttachments.addEventListener('click', () => {
+            currentAttachments = [];
+            updateAttachmentsPreview();
+        });
 
         sendButton.addEventListener('click', sendMessage);
         clearButton.addEventListener('click', clearChat);
