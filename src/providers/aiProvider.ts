@@ -63,6 +63,22 @@ export interface AIRequestContext {
     
     /** Previous conversation history */
     conversationHistory?: AIMessage[];
+    
+    /** Manual file attachments */
+    attachedFiles?: Array<{
+        name: string;
+        path: string;
+        content: string;
+        type: 'text' | 'image' | 'other';
+        size: number;
+    }>;
+    
+    /** Screenshot attachments */
+    attachedScreenshots?: Array<{
+        name: string;
+        dataUrl: string;
+        timestamp: Date;
+    }>;
 }
 
 /**
@@ -524,6 +540,31 @@ export abstract class AIProvider {
 
             if (context.projectContext) {
                 contextPrompt += `- Project context: ${context.projectContext}\n`;
+            }
+
+            if (context.attachedFiles && context.attachedFiles.length > 0) {
+                contextPrompt += `\n- Attached files:\n`;
+                for (const file of context.attachedFiles) {
+                    if (file.type === 'text' && file.content) {
+                        const fileExtension = file.name.split('.').pop() || 'text';
+                        contextPrompt += `\n--- ${file.name} (${(file.size / 1024).toFixed(1)} KB) ---\n`;
+                        contextPrompt += `\`\`\`${fileExtension}\n${file.content}\n\`\`\`\n`;
+                    } else if (file.type === 'image') {
+                        contextPrompt += `\n--- ${file.name} (Image, ${(file.size / 1024).toFixed(1)} KB) ---\n`;
+                        contextPrompt += `[Image file attached - content not displayed in text format]\n`;
+                    } else {
+                        contextPrompt += `\n--- ${file.name} (${file.type}, ${(file.size / 1024).toFixed(1)} KB) ---\n`;
+                        contextPrompt += `[File attached but content not readable as text]\n`;
+                    }
+                }
+            }
+
+            if (context.attachedScreenshots && context.attachedScreenshots.length > 0) {
+                contextPrompt += `\n- Attached screenshots:\n`;
+                for (const screenshot of context.attachedScreenshots) {
+                    contextPrompt += `\n--- ${screenshot.name} ---\n`;
+                    contextPrompt += `[Screenshot attached - visual content not displayed in text format]\n`;
+                }
             }
 
             systemMessages.push({
