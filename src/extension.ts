@@ -205,12 +205,17 @@ async function initializeChatInterface(): Promise<void> {
     
     chatPanel = new ChatPanel(extensionContext, aiProvider, logger);
     
-    const chatTreeView = vscode.window.createTreeView('aiCopilotChat', {
-        treeDataProvider: chatPanel,
-        showCollapseAll: true
-    });
+    const chatWebviewProvider = vscode.window.registerWebviewViewProvider(
+        'aiCopilotChat',
+        chatPanel,
+        {
+            webviewOptions: {
+                retainContextWhenHidden: true
+            }
+        }
+    );
     
-    extensionContext.subscriptions.push(chatTreeView);
+    extensionContext.subscriptions.push(chatWebviewProvider);
     
     logger.info('✅ Chat Interface initialized');
 }

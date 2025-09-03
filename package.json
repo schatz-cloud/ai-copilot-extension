@@ -111,6 +111,7 @@
         {
           "id": "aiCopilotChat",
           "name": "AI Chat Assistant",
+          "type": "webview",
           "when": "aiCopilot.enabled"
         },
         {
