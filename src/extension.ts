@@ -216,7 +216,7 @@ async function initializeCompletionProvider(): Promise<void> {
 async function initializeChatInterface(): Promise<void> {
     logger.info('🔧 Initializing Chat Interface...');
     
-    chatPanel = new ChatPanel(extensionContext, aiProvider, logger);
+    chatPanel = new ChatPanel(extensionContext, aiProvider, logger, configManager);
     
     const chatWebviewProvider = vscode.window.registerWebviewViewProvider(
         'aiCopilotChat',
