@@ -98,6 +98,26 @@ export interface AIRequestContext {
         indexedFiles: number;
         lastUpdated: Date;
     };
+    
+    /** Context scope selection */
+    contextScope?: string;
+    
+    /** Token budget information */
+    tokenBudget?: {
+        estimated: number;
+        limit: number;
+        usage: number;
+        warningThreshold: number;
+        remaining: number;
+    };
+    
+    /** Context scope configuration */
+    scopeConfig?: {
+        scope: string;
+        maxFiles: number;
+        includeFullContent: boolean;
+        summarizationThreshold: number;
+    };
 }
 
 /**

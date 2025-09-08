@@ -36,7 +36,9 @@ export enum ConfigKeys {
     MAX_FILE_SIZE_FOR_INDEXING = 'aiCopilot.maxFileSizeForIndexing',
     FILE_SUMMARIZATION_THRESHOLD = 'aiCopilot.fileSummarizationThreshold',
     INDEXING_IGNORE_PATTERNS = 'aiCopilot.indexingIgnorePatterns',
-    MAX_FILES_TO_INDEX = 'aiCopilot.maxFilesToIndex'
+    MAX_FILES_TO_INDEX = 'aiCopilot.maxFilesToIndex',
+    IMPORTANT_FILES = 'aiCopilot.importantFiles',
+    RELEVANCE_SCORE_WEIGHTS = 'aiCopilot.relevanceScoreWeights'
 }
 
 /**
@@ -50,6 +52,18 @@ export enum SupportedModels {
     CLAUDE_3_SONNET = 'claude-3-sonnet',
     CLAUDE_3_HAIKU = 'claude-3-haiku',
     LOCAL = 'local'
+}
+
+/**
+ * Relevance score weights for enhanced ranking algorithm
+ */
+export interface RelevanceScoreWeights {
+    importRelationship: number;
+    sharedSymbols: number;
+    recentEdits: number;
+    userMarkedImportant: number;
+    directoryProximity: number;
+    fileNameSimilarity: number;
 }
 
 /**
@@ -72,7 +86,21 @@ export interface ExtensionConfig {
     fileSummarizationThreshold: number;
     indexingIgnorePatterns: string[];
     maxFilesToIndex: number;
+    importantFiles: string[];
+    relevanceScoreWeights: RelevanceScoreWeights;
 }
+
+/**
+ * Default relevance score weights
+ */
+const defaultRelevanceScoreWeights: RelevanceScoreWeights = {
+    importRelationship: 1.0,
+    sharedSymbols: 0.8,
+    recentEdits: 0.6,
+    userMarkedImportant: 1.2,
+    directoryProximity: 0.7,
+    fileNameSimilarity: 0.5
+};
 
 /**
  * Default configuration values
@@ -101,7 +129,9 @@ const defaultConfig: ExtensionConfig = {
         '**/*.min.js',
         '**/*.bundle.js'
     ],
-    maxFilesToIndex: 2000
+    maxFilesToIndex: 2000,
+    importantFiles: [],
+    relevanceScoreWeights: defaultRelevanceScoreWeights
 };
 
 /**
@@ -257,7 +287,9 @@ export class ConfigManager {
             maxFileSizeForIndexing: this.getMaxFileSizeForIndexing(),
             fileSummarizationThreshold: this.getFileSummarizationThreshold(),
             indexingIgnorePatterns: this.getIndexingIgnorePatterns(),
-            maxFilesToIndex: this.getMaxFilesToIndex()
+            maxFilesToIndex: this.getMaxFilesToIndex(),
+            importantFiles: this.getImportantFiles(),
+            relevanceScoreWeights: this.getRelevanceScoreWeights()
         };
     }
 
@@ -413,5 +445,38 @@ export class ConfigManager {
 
     public getMaxFilesToIndex(): number {
         return this.configuration.get<number>(ConfigKeys.MAX_FILES_TO_INDEX, defaultConfig.maxFilesToIndex);
+    }
+
+    public getImportantFiles(): string[] {
+        return this.configuration.get<string[]>(ConfigKeys.IMPORTANT_FILES, defaultConfig.importantFiles);
+    }
+
+    public getRelevanceScoreWeights(): RelevanceScoreWeights {
+        return this.configuration.get<RelevanceScoreWeights>(ConfigKeys.RELEVANCE_SCORE_WEIGHTS, defaultConfig.relevanceScoreWeights);
+    }
+
+    public isFileMarkedImportant(filePath: string): boolean {
+        const importantFiles = this.getImportantFiles();
+        return importantFiles.some(pattern => {
+            if (pattern.includes('*') || pattern.includes('?')) {
+                const regex = new RegExp(pattern.replace(/\*/g, '.*').replace(/\?/g, '.'));
+                return regex.test(filePath);
+            }
+            return filePath.includes(pattern) || filePath.endsWith(pattern);
+        });
+    }
+
+    public async addImportantFile(filePath: string): Promise<void> {
+        const currentFiles = this.getImportantFiles();
+        if (!currentFiles.includes(filePath)) {
+            const updatedFiles = [...currentFiles, filePath];
+            await this.updateConfiguration(ConfigKeys.IMPORTANT_FILES, updatedFiles);
+        }
+    }
+
+    public async removeImportantFile(filePath: string): Promise<void> {
+        const currentFiles = this.getImportantFiles();
+        const updatedFiles = currentFiles.filter(file => file !== filePath);
+        await this.updateConfiguration(ConfigKeys.IMPORTANT_FILES, updatedFiles);
     }
 }

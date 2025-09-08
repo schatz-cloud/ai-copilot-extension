@@ -22,7 +22,8 @@ import { AIProvider, AIMessage } from '../providers/aiProvider';
 import { Logger } from '../utils/logger';
 import { ConfigManager } from '../utils/config';
 import { WorkspaceIndexer } from '../services/workspaceIndexer';
-import { ContextCollector, RelatedFile } from '../utils/contextCollector';
+import { ContextCollector, RelatedFile, ContextScope, ContextScopeConfig } from '../utils/contextCollector';
+import { TokenBudgetManager } from '../utils/tokenBudgetManager';
 
 /**
  * Chat message interface for the UI
@@ -87,8 +88,10 @@ export class ChatPanel implements vscode.TreeDataProvider<ChatMessage>, vscode.W
     private configManager: ConfigManager;
     private workspaceIndexer: WorkspaceIndexer;
     private contextCollector: ContextCollector;
+    private tokenBudgetManager: TokenBudgetManager;
     private messages: ChatMessage[] = [];
     private conversationHistory: AIMessage[] = [];
+    private currentContextScope: ContextScope = ContextScope.RELATED_FILES;
 
     /**
      * Initialize the chat panel
@@ -104,6 +107,7 @@ export class ChatPanel implements vscode.TreeDataProvider<ChatMessage>, vscode.W
         this.configManager = configManager ?? new ConfigManager();
         this.workspaceIndexer = new WorkspaceIndexer(logger, this.configManager);
         this.contextCollector = new ContextCollector(logger, this.configManager);
+        this.tokenBudgetManager = new TokenBudgetManager(this.configManager);
         
         this.loadConversationHistory();
         
@@ -292,6 +296,11 @@ export class ChatPanel implements vscode.TreeDataProvider<ChatMessage>, vscode.W
                 await this.handleScreenshotCapture();
                 break;
                 
+            case 'context-scope-change':
+                this.currentContextScope = message.scope as ContextScope;
+                await this.updateTokenBudgetDisplay();
+                break;
+                
             default:
                 this.logger.warn('Unknown webview message type:', message.type);
         }
@@ -376,9 +385,17 @@ export class ChatPanel implements vscode.TreeDataProvider<ChatMessage>, vscode.W
             ));
 
             if (this.configManager.isMultiFileContextEnabled()) {
+                const scopeConfig: ContextScopeConfig = {
+                    scope: this.currentContextScope,
+                    maxFiles: this.configManager.getMaxRelatedFiles(),
+                    includeFullContent: true,
+                    summarizationThreshold: this.configManager.getFileSummarizationThreshold()
+                };
+
                 const contextResult = await this.contextCollector.collectContext(
                     document, 
-                    selection.active
+                    selection.active,
+                    scopeConfig
                 );
                 
                 context.indexedFiles = contextResult.relatedFiles.map((file: RelatedFile) => ({
@@ -390,6 +407,15 @@ export class ChatPanel implements vscode.TreeDataProvider<ChatMessage>, vscode.W
                     lastModified: new Date(),
                     size: file.content.length
                 }));
+
+                context.contextScope = this.currentContextScope;
+                context.scopeConfig = scopeConfig;
+                
+                const budget = this.tokenBudgetManager.checkBudget(context);
+                context.tokenBudget = budget;
+                
+                const optimizedContext = this.tokenBudgetManager.optimizeContext(context);
+                context = optimizedContext;
             }
         }
 
@@ -412,6 +438,27 @@ export class ChatPanel implements vscode.TreeDataProvider<ChatMessage>, vscode.W
 
     private generateFileSummary(content: string, language: string): string | undefined {
         return this.workspaceIndexer.summarizeFile(content, language);
+    }
+
+    private async updateTokenBudgetDisplay(): Promise<void> {
+        if (!this.webviewView) {
+            return;
+        }
+
+        const context = await this.getCurrentWorkspaceContext();
+        const budget = this.tokenBudgetManager.checkBudget(context);
+        const recommendations = this.tokenBudgetManager.getRecommendations(budget, context);
+        
+        await this.webviewView.webview.postMessage({
+            type: 'token-budget-update',
+            budget: {
+                ...budget,
+                display: this.tokenBudgetManager.formatBudgetDisplay(budget),
+                status: recommendations.status,
+                message: recommendations.message,
+                actions: recommendations.actions
+            }
+        });
     }
 
     /**
@@ -725,6 +772,75 @@ export class ChatPanel implements vscode.TreeDataProvider<ChatMessage>, vscode.W
             gap: 5px;
         }
         
+        .context-controls {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 8px;
+            margin-bottom: 10px;
+            border: 1px solid var(--vscode-panel-border);
+            border-radius: 4px;
+            background-color: var(--vscode-editor-background);
+        }
+        
+        .context-scope-selector {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .context-scope-selector label {
+            font-size: 0.9em;
+            color: var(--vscode-foreground);
+        }
+        
+        .context-scope-selector select {
+            padding: 4px 8px;
+            border: 1px solid var(--vscode-input-border);
+            border-radius: 3px;
+            background-color: var(--vscode-input-background);
+            color: var(--vscode-input-foreground);
+            font-family: inherit;
+            font-size: 0.9em;
+        }
+        
+        .token-budget-display {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 0.85em;
+        }
+        
+        .token-budget-meter {
+            width: 100px;
+            height: 6px;
+            background-color: var(--vscode-progressBar-background);
+            border-radius: 3px;
+            overflow: hidden;
+        }
+        
+        .token-budget-fill {
+            height: 100%;
+            background-color: var(--vscode-progressBar-background);
+            transition: width 0.3s ease, background-color 0.3s ease;
+        }
+        
+        .token-budget-fill.safe {
+            background-color: #4CAF50;
+        }
+        
+        .token-budget-fill.warning {
+            background-color: #FF9800;
+        }
+        
+        .token-budget-fill.critical {
+            background-color: #F44336;
+        }
+        
+        .token-budget-fill.exceeded {
+            background-color: #D32F2F;
+        }
+        
         .chat-input {
             flex: 1;
             padding: 8px;
@@ -861,6 +977,22 @@ export class ChatPanel implements vscode.TreeDataProvider<ChatMessage>, vscode.W
     </style>
 </head>
 <body>
+    <div class="context-controls">
+        <div class="context-scope-selector">
+            <label for="context-scope">Context Scope:</label>
+            <select id="context-scope">
+                <option value="active-file">Active File</option>
+                <option value="related-files" selected>Related Files</option>
+                <option value="whole-project">Whole Project</option>
+            </select>
+        </div>
+        <div class="token-budget-display">
+            <span id="token-budget-text">🟢 0/4000 tokens (0%)</span>
+            <div class="token-budget-meter">
+                <div class="token-budget-fill safe" id="token-budget-fill" style="width: 0%"></div>
+            </div>
+        </div>
+    </div>
     <div class="chat-container" id="chatContainer">
         <div class="empty-state" id="emptyState">
             <h3>🤖 AI Copilot Chat</h3>
@@ -930,6 +1062,10 @@ export class ChatPanel implements vscode.TreeDataProvider<ChatMessage>, vscode.W
                 case 'files-attached':
                     currentAttachments.push(...message.attachments);
                     updateAttachmentsPreview();
+                    break;
+                    
+                case 'token-budget-update':
+                    updateTokenBudgetDisplay(message.budget);
                     break;
             }
         });
@@ -1087,6 +1223,27 @@ export class ChatPanel implements vscode.TreeDataProvider<ChatMessage>, vscode.W
             currentAttachments.splice(index, 1);
             updateAttachmentsPreview();
         }
+        
+        function updateTokenBudgetDisplay(budget) {
+            const textElement = document.getElementById('token-budget-text');
+            const fillElement = document.getElementById('token-budget-fill');
+            
+            if (textElement && fillElement) {
+                textElement.textContent = budget.display;
+                
+                const percentage = Math.min(100, (budget.usage / budget.limit) * 100);
+                fillElement.style.width = percentage + '%';
+                
+                fillElement.className = 'token-budget-fill ' + budget.status;
+                
+                if (budget.status === 'warning' || budget.status === 'critical' || budget.status === 'exceeded') {
+                    console.log('Token Budget Warning:', budget.message);
+                    if (budget.actions && budget.actions.length > 0) {
+                        console.log('Recommended actions:', budget.actions);
+                    }
+                }
+            }
+        }
 
         attachFileButton.addEventListener('click', () => {
             vscode.postMessage({
@@ -1113,6 +1270,14 @@ export class ChatPanel implements vscode.TreeDataProvider<ChatMessage>, vscode.W
                 e.preventDefault();
                 sendMessage();
             }
+        });
+
+        document.getElementById('context-scope')?.addEventListener('change', (e) => {
+            const scope = e.target.value;
+            vscode.postMessage({
+                type: 'context-scope-change',
+                scope: scope
+            });
         });
 
         chatInput.focus();
