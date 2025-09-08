@@ -2,7 +2,7 @@
   "name": "ai-copilot-extension",
   "displayName": "AI Copilot Extension",
   "description": "VS Code extension with AI copilot capabilities and agentic abilities for intelligent code assistance",
-  "version": "1.1.1",
+  "version": "1.2.0",
   "publisher": "ai-copilot",
   "author": "SATISH KUMAR NADARAJAN (penintechwiz@gmail.com)",
   "license": "MIT",
