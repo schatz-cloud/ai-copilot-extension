@@ -21,6 +21,7 @@ import { AgentPanel } from './views/agentPanel';
 import { CodeAgent } from './agents/codeAgent';
 import { TaskAgent } from './agents/taskAgent';
 import { registerCommands } from './commands';
+import { WorkspaceIndexer } from './services/workspaceIndexer';
 
 /**
  * Extension context and global state management
@@ -216,7 +217,7 @@ async function initializeCompletionProvider(): Promise<void> {
 async function initializeChatInterface(): Promise<void> {
     logger.info('🔧 Initializing Chat Interface...');
     
-    chatPanel = new ChatPanel(extensionContext, aiProvider, logger);
+    chatPanel = new ChatPanel(extensionContext, aiProvider, logger, configManager);
     
     const chatWebviewProvider = vscode.window.registerWebviewViewProvider(
         'aiCopilotChat',
@@ -229,6 +230,18 @@ async function initializeChatInterface(): Promise<void> {
     );
     
     extensionContext.subscriptions.push(chatWebviewProvider);
+    
+    const workspaceIndexer = new WorkspaceIndexer(logger, configManager);
+    
+    if (vscode.workspace.workspaceFolders) {
+        for (const folder of vscode.workspace.workspaceFolders) {
+            workspaceIndexer.startIndexing(folder);
+        }
+    }
+    
+    extensionContext.subscriptions.push({
+        dispose: () => workspaceIndexer.dispose()
+    });
     
     logger.info('✅ Chat Interface initialized');
 }

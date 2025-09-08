@@ -31,7 +31,11 @@ export enum ConfigKeys {
     ENABLE_AGENTIC_MODE = 'aiCopilot.enableAgenticMode',
     MAX_TOKENS = 'aiCopilot.maxTokens',
     TEMPERATURE = 'aiCopilot.temperature',
-    LOCAL_ENDPOINT = 'aiCopilot.localEndpoint'
+    LOCAL_ENDPOINT = 'aiCopilot.localEndpoint',
+    WORKSPACE_INDEXING_ENABLED = 'aiCopilot.workspaceIndexingEnabled',
+    MAX_FILE_SIZE_FOR_INDEXING = 'aiCopilot.maxFileSizeForIndexing',
+    FILE_SUMMARIZATION_THRESHOLD = 'aiCopilot.fileSummarizationThreshold',
+    INDEXING_IGNORE_PATTERNS = 'aiCopilot.indexingIgnorePatterns'
 }
 
 /**
@@ -62,6 +66,10 @@ export interface ExtensionConfig {
     maxTokens: number;
     temperature: number;
     localEndpoint: string;
+    workspaceIndexingEnabled: boolean;
+    maxFileSizeForIndexing: number;
+    fileSummarizationThreshold: number;
+    indexingIgnorePatterns: string[];
 }
 
 /**
@@ -78,7 +86,19 @@ const defaultConfig: ExtensionConfig = {
     enableAgenticMode: false,
     maxTokens: 2048,
     temperature: 0.3,
-    localEndpoint: 'http://localhost:11434'
+    localEndpoint: 'http://localhost:11434',
+    workspaceIndexingEnabled: true,
+    maxFileSizeForIndexing: 1048576,
+    fileSummarizationThreshold: 10000,
+    indexingIgnorePatterns: [
+        '**/node_modules/**',
+        '**/dist/**',
+        '**/build/**',
+        '**/.git/**',
+        '**/coverage/**',
+        '**/*.min.js',
+        '**/*.bundle.js'
+    ]
 };
 
 /**
@@ -229,7 +249,11 @@ export class ConfigManager {
             enableAgenticMode: this.isAgenticModeEnabled(),
             maxTokens: this.getMaxTokens(),
             temperature: this.getTemperature(),
-            localEndpoint: this.getLocalEndpoint()
+            localEndpoint: this.getLocalEndpoint(),
+            workspaceIndexingEnabled: this.isWorkspaceIndexingEnabled(),
+            maxFileSizeForIndexing: this.getMaxFileSizeForIndexing(),
+            fileSummarizationThreshold: this.getFileSummarizationThreshold(),
+            indexingIgnorePatterns: this.getIndexingIgnorePatterns()
         };
     }
 
@@ -365,5 +389,21 @@ export class ConfigManager {
         }
         
         return true;
+    }
+
+    public isWorkspaceIndexingEnabled(): boolean {
+        return this.configuration.get<boolean>(ConfigKeys.WORKSPACE_INDEXING_ENABLED, defaultConfig.workspaceIndexingEnabled);
+    }
+
+    public getMaxFileSizeForIndexing(): number {
+        return this.configuration.get<number>(ConfigKeys.MAX_FILE_SIZE_FOR_INDEXING, defaultConfig.maxFileSizeForIndexing);
+    }
+
+    public getFileSummarizationThreshold(): number {
+        return this.configuration.get<number>(ConfigKeys.FILE_SUMMARIZATION_THRESHOLD, defaultConfig.fileSummarizationThreshold);
+    }
+
+    public getIndexingIgnorePatterns(): string[] {
+        return this.configuration.get<string[]>(ConfigKeys.INDEXING_IGNORE_PATTERNS, defaultConfig.indexingIgnorePatterns);
     }
 }

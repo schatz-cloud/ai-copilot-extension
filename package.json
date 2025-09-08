@@ -206,6 +206,42 @@
           "type": "string",
           "default": "http://localhost:11434",
           "description": "Local AI model endpoint URL (for local model option)"
+        },
+        "aiCopilot.workspaceIndexingEnabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable automatic workspace file indexing for enhanced context",
+          "markdownDescription": "Automatically index workspace files to provide better context for AI responses"
+        },
+        "aiCopilot.maxFileSizeForIndexing": {
+          "type": "number",
+          "default": 1048576,
+          "description": "Maximum file size in bytes to include in workspace indexing (default: 1MB)",
+          "minimum": 1024,
+          "maximum": 10485760
+        },
+        "aiCopilot.fileSummarizationThreshold": {
+          "type": "number",
+          "default": 10000,
+          "description": "File size threshold in characters for automatic summarization (default: 10KB)",
+          "minimum": 1000,
+          "maximum": 100000
+        },
+        "aiCopilot.indexingIgnorePatterns": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [
+            "**/node_modules/**",
+            "**/dist/**",
+            "**/build/**",
+            "**/.git/**",
+            "**/coverage/**",
+            "**/*.min.js",
+            "**/*.bundle.js"
+          ],
+          "description": "Glob patterns for files/directories to exclude from workspace indexing"
         }
       }
     }

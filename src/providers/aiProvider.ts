@@ -79,6 +79,25 @@ export interface AIRequestContext {
         dataUrl: string;
         timestamp: Date;
     }>;
+    
+    /** Indexed workspace files with metadata */
+    indexedFiles?: Array<{
+        path: string;
+        content: string;
+        summary?: string;
+        language: string;
+        relevanceScore: number;
+        lastModified: Date;
+        size: number;
+    }>;
+    
+    /** Workspace indexing metadata */
+    indexingStatus?: {
+        isComplete: boolean;
+        totalFiles: number;
+        indexedFiles: number;
+        lastUpdated: Date;
+    };
 }
 
 /**
@@ -565,6 +584,28 @@ export abstract class AIProvider {
                     contextPrompt += `\n--- ${screenshot.name} ---\n`;
                     contextPrompt += `[Screenshot attached - visual content not displayed in text format]\n`;
                 }
+            }
+
+            if (context.indexedFiles && context.indexedFiles.length > 0) {
+                contextPrompt += `\n- Indexed workspace files:\n`;
+                for (const file of context.indexedFiles) {
+                    const relativePath = file.path.includes('/') ? file.path.split('/').pop() || file.path : file.path;
+                    contextPrompt += `\n--- ${relativePath} (${file.language}, relevance: ${file.relevanceScore.toFixed(2)}) ---\n`;
+                    
+                    if (file.summary) {
+                        contextPrompt += `Summary: ${file.summary}\n`;
+                    } else {
+                        contextPrompt += `\`\`\`${file.language}\n${file.content}\n\`\`\`\n`;
+                    }
+                }
+            }
+
+            if (context.indexingStatus) {
+                contextPrompt += `\n- Workspace indexing status: ${context.indexingStatus.indexedFiles}/${context.indexingStatus.totalFiles} files indexed`;
+                if (!context.indexingStatus.isComplete) {
+                    contextPrompt += ` (indexing in progress)`;
+                }
+                contextPrompt += `\n`;
             }
 
             systemMessages.push({

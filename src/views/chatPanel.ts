@@ -20,6 +20,9 @@ import * as vscode from 'vscode';
 import * as path from 'path';
 import { AIProvider, AIMessage } from '../providers/aiProvider';
 import { Logger } from '../utils/logger';
+import { ConfigManager } from '../utils/config';
+import { WorkspaceIndexer } from '../services/workspaceIndexer';
+import { ContextCollector } from '../utils/contextCollector';
 
 /**
  * Chat message interface for the UI
@@ -81,6 +84,9 @@ export class ChatPanel implements vscode.TreeDataProvider<ChatMessage>, vscode.W
     private context: vscode.ExtensionContext;
     private aiProvider: AIProvider;
     private logger: Logger;
+    private configManager: ConfigManager;
+    private workspaceIndexer: WorkspaceIndexer;
+    private contextCollector: ContextCollector;
     private messages: ChatMessage[] = [];
     private conversationHistory: AIMessage[] = [];
 
@@ -91,10 +97,13 @@ export class ChatPanel implements vscode.TreeDataProvider<ChatMessage>, vscode.W
      * @param aiProvider - AI provider for generating responses
      * @param logger - Logger instance for debugging
      */
-    constructor(context: vscode.ExtensionContext, aiProvider: AIProvider, logger: Logger) {
+    constructor(context: vscode.ExtensionContext, aiProvider: AIProvider, logger: Logger, configManager: ConfigManager) {
         this.context = context;
         this.aiProvider = aiProvider;
         this.logger = logger;
+        this.configManager = configManager;
+        this.workspaceIndexer = new WorkspaceIndexer(logger, configManager);
+        this.contextCollector = new ContextCollector(logger, configManager);
         
         this.loadConversationHistory();
         
@@ -341,7 +350,9 @@ export class ChatPanel implements vscode.TreeDataProvider<ChatMessage>, vscode.W
         
         let context: any = {
             workspaceName: vscode.workspace.name || 'Unknown',
-            workspaceFolders: vscode.workspace.workspaceFolders?.map(folder => folder.name) || []
+            workspaceFolders: vscode.workspace.workspaceFolders?.map(folder => folder.name) || [],
+            indexedFiles: [],
+            indexingStatus: this.workspaceIndexer.getStatus()
         };
 
         if (activeEditor) {
@@ -363,9 +374,25 @@ export class ChatPanel implements vscode.TreeDataProvider<ChatMessage>, vscode.W
                 new vscode.Position(startLine, 0),
                 new vscode.Position(endLine, document.lineAt(endLine).text.length)
             ));
+
+            if (this.configManager.isMultiFileContextEnabled()) {
+                const contextResult = await this.contextCollector.collectContext(
+                    document, 
+                    selection.active
+                );
+                
+                context.indexedFiles = contextResult.relatedFiles.map((file: any) => ({
+                    path: file.path,
+                    content: file.content,
+                    summary: this.generateFileSummary(file.content, file.language),
+                    language: file.language,
+                    relevanceScore: file.relevanceScore,
+                    lastModified: new Date(),
+                    size: file.content.length
+                }));
+            }
         }
 
-        // Include manual attachments from the latest user message
         const latestUserMessage = this.messages.filter(m => m.role === 'user').pop();
         if (latestUserMessage?.attachedFiles) {
             context.attachedFiles = latestUserMessage.attachedFiles;
@@ -375,6 +402,10 @@ export class ChatPanel implements vscode.TreeDataProvider<ChatMessage>, vscode.W
         }
 
         return context;
+    }
+
+    private generateFileSummary(content: string, language: string): string | undefined {
+        return this.workspaceIndexer.summarizeFile(content, language);
     }
 
     /**
@@ -1089,6 +1120,7 @@ export class ChatPanel implements vscode.TreeDataProvider<ChatMessage>, vscode.W
      */
     dispose(): void {
         this._onDidChangeTreeData.dispose();
+        this.workspaceIndexer.dispose();
         this.logger.info('Chat Panel disposed');
     }
 }
