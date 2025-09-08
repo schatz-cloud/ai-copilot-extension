@@ -393,7 +393,13 @@ export class ChatPanel implements vscode.TreeDataProvider<ChatMessage>, vscode.W
             }
         }
 
-        const latestUserMessage = [...this.messages].reverse().find(m => m.role === 'user');
+        let latestUserMessage: ChatMessage | undefined = undefined;
+        for (let i = this.messages.length - 1; i >= 0; i--) {
+            if (this.messages[i].role === 'user') {
+                latestUserMessage = this.messages[i];
+                break;
+            }
+        }
         if (latestUserMessage?.attachedFiles) {
             context.attachedFiles = latestUserMessage.attachedFiles;
         }

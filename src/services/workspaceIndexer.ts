@@ -31,6 +31,9 @@ export interface IndexingStatus {
 }
 
 export class WorkspaceIndexer {
+    private static readonly FILE_CHANGE_DEBOUNCE_MS = 1000;
+    private static readonly FILE_CREATE_DEBOUNCE_MS = 500;
+    
     private logger: Logger;
     private configManager: ConfigManager;
     private indexedFiles: Map<string, IndexedFile> = new Map();
@@ -155,7 +158,8 @@ export class WorkspaceIndexer {
         const maxFileSize = this.configManager.getMaxFileSizeForIndexing();
         
         const pattern = new vscode.RelativePattern(workspaceFolder, '**/*');
-        const files = await vscode.workspace.findFiles(pattern, `{${ignorePatterns.join(',')}}`, 1000);
+        const maxFilesToIndex = this.configManager.getMaxFilesToIndex();
+        const files = await vscode.workspace.findFiles(pattern, `{${ignorePatterns.join(',')}}`, maxFilesToIndex);
         
         const validFiles: vscode.Uri[] = [];
         for (const file of files) {
@@ -280,11 +284,11 @@ export class WorkspaceIndexer {
         this.fileWatcher = vscode.workspace.createFileSystemWatcher('**/*');
         
         this.fileWatcher.onDidChange(uri => {
-            setTimeout(() => this.updateFileIndex(uri), 1000);
+            setTimeout(() => this.updateFileIndex(uri), WorkspaceIndexer.FILE_CHANGE_DEBOUNCE_MS);
         });
         
         this.fileWatcher.onDidCreate(uri => {
-            setTimeout(() => this.updateFileIndex(uri), 500);
+            setTimeout(() => this.updateFileIndex(uri), WorkspaceIndexer.FILE_CREATE_DEBOUNCE_MS);
         });
         
         this.fileWatcher.onDidDelete(uri => {

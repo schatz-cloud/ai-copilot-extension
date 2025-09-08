@@ -35,7 +35,8 @@ export enum ConfigKeys {
     WORKSPACE_INDEXING_ENABLED = 'aiCopilot.workspaceIndexingEnabled',
     MAX_FILE_SIZE_FOR_INDEXING = 'aiCopilot.maxFileSizeForIndexing',
     FILE_SUMMARIZATION_THRESHOLD = 'aiCopilot.fileSummarizationThreshold',
-    INDEXING_IGNORE_PATTERNS = 'aiCopilot.indexingIgnorePatterns'
+    INDEXING_IGNORE_PATTERNS = 'aiCopilot.indexingIgnorePatterns',
+    MAX_FILES_TO_INDEX = 'aiCopilot.maxFilesToIndex'
 }
 
 /**
@@ -70,6 +71,7 @@ export interface ExtensionConfig {
     maxFileSizeForIndexing: number;
     fileSummarizationThreshold: number;
     indexingIgnorePatterns: string[];
+    maxFilesToIndex: number;
 }
 
 /**
@@ -98,7 +100,8 @@ const defaultConfig: ExtensionConfig = {
         '**/coverage/**',
         '**/*.min.js',
         '**/*.bundle.js'
-    ]
+    ],
+    maxFilesToIndex: 2000
 };
 
 /**
@@ -253,7 +256,8 @@ export class ConfigManager {
             workspaceIndexingEnabled: this.isWorkspaceIndexingEnabled(),
             maxFileSizeForIndexing: this.getMaxFileSizeForIndexing(),
             fileSummarizationThreshold: this.getFileSummarizationThreshold(),
-            indexingIgnorePatterns: this.getIndexingIgnorePatterns()
+            indexingIgnorePatterns: this.getIndexingIgnorePatterns(),
+            maxFilesToIndex: this.getMaxFilesToIndex()
         };
     }
 
@@ -405,5 +409,9 @@ export class ConfigManager {
 
     public getIndexingIgnorePatterns(): string[] {
         return this.configuration.get<string[]>(ConfigKeys.INDEXING_IGNORE_PATTERNS, defaultConfig.indexingIgnorePatterns);
+    }
+
+    public getMaxFilesToIndex(): number {
+        return this.configuration.get<number>(ConfigKeys.MAX_FILES_TO_INDEX, defaultConfig.maxFilesToIndex);
     }
 }
