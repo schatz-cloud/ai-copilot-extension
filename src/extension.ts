@@ -21,7 +21,6 @@ import { AgentPanel } from './views/agentPanel';
 import { CodeAgent } from './agents/codeAgent';
 import { TaskAgent } from './agents/taskAgent';
 import { registerCommands } from './commands';
-import { WorkspaceIndexer } from './services/workspaceIndexer';
 
 /**
  * Extension context and global state management
@@ -230,18 +229,6 @@ async function initializeChatInterface(): Promise<void> {
     );
     
     extensionContext.subscriptions.push(chatWebviewProvider);
-    
-    const workspaceIndexer = new WorkspaceIndexer(logger, configManager);
-    
-    if (vscode.workspace.workspaceFolders) {
-        for (const folder of vscode.workspace.workspaceFolders) {
-            workspaceIndexer.startIndexing(folder);
-        }
-    }
-    
-    extensionContext.subscriptions.push({
-        dispose: () => workspaceIndexer.dispose()
-    });
     
     logger.info('✅ Chat Interface initialized');
 }

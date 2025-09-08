@@ -165,6 +165,7 @@ export class WorkspaceIndexer {
                     validFiles.push(file);
                 }
             } catch (error) {
+                this.logger.debug(`Skipping file ${file.fsPath} due to error during stat:`, error);
             }
         }
         
@@ -230,7 +231,7 @@ export class WorkspaceIndexer {
         const lines = content.split('\n');
         const summary: string[] = [];
         
-        const imports = lines.filter(line => line.trim().startsWith('import ') || line.trim().startsWith('const ') && line.includes('require('));
+        const imports = lines.filter(line => line.trim().startsWith('import ') || (line.trim().startsWith('const ') && line.includes('require(')));
         summary.push(...imports.slice(0, 10));
         
         const declarations = lines.filter(line => {
@@ -238,7 +239,7 @@ export class WorkspaceIndexer {
             return trimmed.startsWith('export ') || 
                    trimmed.startsWith('function ') || 
                    trimmed.startsWith('class ') ||
-                   trimmed.startsWith('const ') && line.includes('=>');
+                   /^const\s+\w+\s*=\s*(\([^\)]*\)|\w+)?\s*=>/.test(trimmed);
         });
         summary.push(...declarations.slice(0, 15));
         

@@ -22,7 +22,7 @@ import { AIProvider, AIMessage } from '../providers/aiProvider';
 import { Logger } from '../utils/logger';
 import { ConfigManager } from '../utils/config';
 import { WorkspaceIndexer } from '../services/workspaceIndexer';
-import { ContextCollector } from '../utils/contextCollector';
+import { ContextCollector, RelatedFile } from '../utils/contextCollector';
 
 /**
  * Chat message interface for the UI
@@ -97,13 +97,13 @@ export class ChatPanel implements vscode.TreeDataProvider<ChatMessage>, vscode.W
      * @param aiProvider - AI provider for generating responses
      * @param logger - Logger instance for debugging
      */
-    constructor(context: vscode.ExtensionContext, aiProvider: AIProvider, logger: Logger, configManager: ConfigManager) {
+    constructor(context: vscode.ExtensionContext, aiProvider: AIProvider, logger: Logger, configManager?: ConfigManager) {
         this.context = context;
         this.aiProvider = aiProvider;
         this.logger = logger;
-        this.configManager = configManager;
-        this.workspaceIndexer = new WorkspaceIndexer(logger, configManager);
-        this.contextCollector = new ContextCollector(logger, configManager);
+        this.configManager = configManager ?? new ConfigManager();
+        this.workspaceIndexer = new WorkspaceIndexer(logger, this.configManager);
+        this.contextCollector = new ContextCollector(logger, this.configManager);
         
         this.loadConversationHistory();
         
@@ -381,7 +381,7 @@ export class ChatPanel implements vscode.TreeDataProvider<ChatMessage>, vscode.W
                     selection.active
                 );
                 
-                context.indexedFiles = contextResult.relatedFiles.map((file: any) => ({
+                context.indexedFiles = contextResult.relatedFiles.map((file: RelatedFile) => ({
                     path: file.path,
                     content: file.content,
                     summary: this.generateFileSummary(file.content, file.language),
@@ -393,7 +393,7 @@ export class ChatPanel implements vscode.TreeDataProvider<ChatMessage>, vscode.W
             }
         }
 
-        const latestUserMessage = this.messages.filter(m => m.role === 'user').pop();
+        const latestUserMessage = [...this.messages].reverse().find(m => m.role === 'user');
         if (latestUserMessage?.attachedFiles) {
             context.attachedFiles = latestUserMessage.attachedFiles;
         }
